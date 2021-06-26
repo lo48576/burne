@@ -5,9 +5,19 @@
 #![warn(clippy::missing_docs_in_private_items)]
 #![warn(clippy::unwrap_used)]
 
+mod cli_opt;
+mod renamer;
+
+use clap::Clap;
+
+use self::cli_opt::Opt;
+
 /// Entrypoint.
 fn main() {
     init_logger();
+
+    let opt = Opt::parse();
+    log::debug!("opt = {:?}", opt);
 }
 
 /// Initialize logger.
