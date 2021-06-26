@@ -1,0 +1,23 @@
+[package]
+name = "burne"
+version = "0.0.0"
+authors = ["YOSHIOKA Takuma <lo48576@hard-wi.red>"]
+edition = "2018"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+description = "BUlk ReName by Editor"
+repository = "https://gitlab.com/lo48576/burne"
+keywords = []
+publish = false
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+
+[badges]
+maintenance = { status = "experimental" }
+gitlab = { repository = "lo48576/burne", branch = "master" }
