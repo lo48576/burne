@@ -28,7 +28,9 @@ pub(crate) struct Opt {
     /// Instead of running rename, just prints filenames before and after the rename.
     #[clap(short = 'n', long)]
     dry_run: bool,
-    /// Makes parent directories for destination paths as needed.
+    /// *UNIMPLEMENTED*: Makes parent directories for destination paths as needed.
+    ///
+    /// Not yet implemented.
     #[clap(short, long)]
     parents: bool,
     /// Separates the lines by NUL characters.
