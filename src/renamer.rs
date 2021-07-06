@@ -5,10 +5,14 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, BufRead, Write};
 #[cfg(unix)]
-use std::os::unix::ffi::OsStringExt;
+use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail};
+
+/// Characters to be escaped by percent encoding.
+const PERCENT_ENCODE_ESCAPE_SET: &percent_encoding::AsciiSet =
+    &percent_encoding::CONTROLS.add(b' ').add(b'\n');
 
 /// Escape method.
 #[derive(Debug, Clone, Copy)]
@@ -18,6 +22,8 @@ pub(crate) enum Escape {
     /// Cannot rename to filenames with special characters, and fails if the
     /// source filenames contains special characters.
     None,
+    /// Percent encoding.
+    PercentEncoding,
 }
 
 impl Escape {
@@ -55,6 +61,22 @@ impl Escape {
                     path
                 )),
             },
+            Self::PercentEncoding => {
+                let encoded = percent_encoding::percent_encode(
+                    path.as_os_str().as_bytes(),
+                    PERCENT_ENCODE_ESCAPE_SET,
+                );
+                assert!(
+                    encoded
+                        .clone()
+                        .flat_map(|s| s.bytes())
+                        .all(|b| b != line_sep.to_byte()),
+                    "escaped path string should not contain line separators"
+                );
+                write!(writer, "{}", encoded)?;
+
+                Ok(())
+            }
         }
     }
 
@@ -68,6 +90,9 @@ impl Escape {
     fn unescape(self, s: &str, _line_sep: LineSeparator) -> anyhow::Result<Cow<'_, Path>> {
         match self {
             Self::None => Ok(Cow::Borrowed(Path::new(s))),
+            Self::PercentEncoding => Ok(Cow::Owned(PathBuf::from(OsString::from_vec(
+                percent_encoding::percent_decode(s.as_bytes()).collect(),
+            )))),
         }
     }
     */
@@ -89,15 +114,16 @@ impl Escape {
             return Ok(None);
         }
 
+        let mut bytes = Vec::new();
+        reader.read_until(line_sep.to_byte(), &mut bytes)?;
+        if bytes.last() == Some(&line_sep.to_byte()) {
+            bytes.pop();
+        }
         match self {
-            Self::None => {
-                let mut bytes = Vec::new();
-                reader.read_until(line_sep.to_byte(), &mut bytes)?;
-                if bytes.last() == Some(&line_sep.to_byte()) {
-                    bytes.pop();
-                }
-                Ok(Some(OsString::from_vec(bytes)))
-            }
+            Self::None => Ok(Some(OsString::from_vec(bytes))),
+            Self::PercentEncoding => Ok(Some(OsString::from_vec(
+                percent_encoding::percent_decode(&bytes).collect(),
+            ))),
         }
     }
 }
@@ -109,8 +135,16 @@ impl Escape {
     pub(crate) fn try_from_cli_str(s: &str) -> anyhow::Result<Self> {
         match s {
             "none" => Ok(Self::None),
+            "percent" | "percent-encoding" => Ok(Self::PercentEncoding),
             s => Err(anyhow!("unknown escape method {:?}", s)),
         }
+    }
+
+    /// Returns the possible CLI string representation of the `Escape` variants.
+    ///
+    /// This is intended for use with CLI parser.
+    pub(crate) fn cli_possible_values() -> &'static [&'static str] {
+        &["none", "percent", "percent-encoding"]
     }
 }
 
