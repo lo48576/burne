@@ -18,6 +18,11 @@ fn main() {
 
     let opt = Opt::parse();
     log::debug!("opt = {:?}", opt);
+
+    if let Err(e) = opt.run() {
+        eprintln!("{:?}", e);
+        std::process::exit(1);
+    }
 }
 
 /// Initialize logger.
