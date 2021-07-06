@@ -19,7 +19,11 @@ pub(crate) struct Opt {
     #[clap(default_value = ".")]
     pub(crate) source_dir: PathBuf,
     /// Escape method.
-    #[clap(short, long, parse(try_from_str = Escape::try_from_cli_str), default_value = "none")]
+    #[clap(
+        short, long, parse(try_from_str = Escape::try_from_cli_str),
+        possible_values(Escape::cli_possible_values()),
+        default_value = "none"
+    )]
     escape: Escape,
     /// Instead of running rename, just prints filenames before and after the rename.
     #[clap(short = 'n', long)]
