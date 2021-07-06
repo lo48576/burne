@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use anyhow::{bail, Context as _};
 use clap::Clap;
 
-use crate::renamer::{Escape, LineSeparator, RenameSetup};
+use crate::renamer::{Escape, LineSeparator, RenameSetup, Renamer};
 
 /// Renames child files in a directory using editor.
 #[derive(Debug, Clone, Clap)]
@@ -65,7 +65,12 @@ impl Opt {
         let plan = setup.plan(&mut tempfile, self.escape, self.line_sep)?;
         log::trace!("plan = {:#?}", plan);
 
-        plan.run()?;
+        let renamer = if self.dry_run {
+            Renamer::DryRun
+        } else {
+            Renamer::StdFs
+        };
+        plan.run(&renamer)?;
 
         Ok(())
     }
