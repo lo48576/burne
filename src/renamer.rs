@@ -329,20 +329,10 @@ pub(crate) struct RenamePlan {
 
 impl RenamePlan {
     /// Runs the rename plan.
-    pub(crate) fn run(self) -> io::Result<()> {
+    pub(crate) fn run(self, renamer: &Renamer) -> io::Result<()> {
         let source_dir: &Path = &self.source_dir;
         for seq_chain in &self.seq_rename_chains {
-            log::trace!("sequential chain: {:?}", seq_chain);
-            for src_dest in seq_chain.windows(2).rev() {
-                let (src, dest) = match src_dest {
-                    [src, dest] => (src, dest),
-                    _ => unreachable!(
-                        "iterator returned by `slice::windows(2)` should always 2-element arrays"
-                    ),
-                };
-                log::trace!("rename: {:?} => {:?}", src, dest);
-                self.rename_single(source_dir.join(src), source_dir.join(dest))?;
-            }
+            self.rename_seq_chain(seq_chain, &renamer)?;
         }
         if !self.cyclic_rename_chains.is_empty() {
             // Use `tempfile::TempDir::into_path()` in order to avoid user files
@@ -350,17 +340,24 @@ impl RenamePlan {
             // In other words, all we need here is just creating a temporary
             // directory with unique name, but not automatically deleting
             // temporary directory (on rename failure).
-            let tempdir_path = tempfile::Builder::new()
-                .prefix(".burne_")
-                .tempdir_in(source_dir)?
-                .into_path();
+            let tempdir_path = if renamer.is_dry_run() {
+                None
+            } else {
+                let path = tempfile::Builder::new()
+                    .prefix(".burne_")
+                    .tempdir_in(source_dir)?
+                    .into_path();
+                Some(path)
+            };
             for cyc_chain in &self.cyclic_rename_chains {
-                self.rename_cyc_chain(cyc_chain, &tempdir_path)?;
+                self.rename_cyc_chain(cyc_chain, tempdir_path.as_deref(), &renamer)?;
             }
 
-            // Remove the temporary directory.
-            // Note that the directory must be empty here.
-            fs::remove_dir(&tempdir_path)?;
+            if let Some(tempdir_path) = tempdir_path {
+                // Remove the temporary directory.
+                // Note that the directory must be empty here.
+                fs::remove_dir(&tempdir_path)?;
+            }
         }
 
         Ok(())
@@ -373,24 +370,25 @@ impl RenamePlan {
         &self,
         rel_src: impl AsRef<Path>,
         rel_dest: impl AsRef<Path>,
+        renamer: &Renamer,
     ) -> io::Result<()> {
-        self.rename_single_impl(rel_src.as_ref(), rel_dest.as_ref())
+        self.rename_single_impl(rel_src.as_ref(), rel_dest.as_ref(), renamer)
     }
 
     /// Renames a file (or directory).
     ///
     /// `rel_src` and `rel_dest` should be relative to `self.soruce_dir`.
-    fn rename_single_impl(&self, rel_src: &Path, rel_dest: &Path) -> io::Result<()> {
-        log::trace!("rename: {:?} => {:?}", rel_src, rel_dest);
-        fs::rename(
-            &self.source_dir.join(rel_src),
-            &self.source_dir.join(rel_dest),
-        )
+    fn rename_single_impl(
+        &self,
+        rel_src: &Path,
+        rel_dest: &Path,
+        renamer: &Renamer,
+    ) -> io::Result<()> {
+        renamer.rename(&self.source_dir, rel_src, rel_dest)
     }
 
     /// Renames the given sequential chain using the given temporary directar
-    fn rename_seq_chain(&self, seq_chain: &[OsString]) -> io::Result<()> {
-        let source_dir = &self.source_dir;
+    fn rename_seq_chain(&self, seq_chain: &[OsString], renamer: &Renamer) -> io::Result<()> {
         log::trace!("sequential chain: {:?}", seq_chain);
         for src_dest in seq_chain.windows(2).rev() {
             let (src, dest) = match src_dest {
@@ -399,14 +397,21 @@ impl RenamePlan {
                     "item type of `slice::windows(2)` iterator should always be 2-element arrays"
                 ),
             };
-            self.rename_single(source_dir.join(src), source_dir.join(dest))?;
+            self.rename_single(src, dest, renamer)?;
         }
 
         Ok(())
     }
 
     /// Runs the given cyclic chain using the given temporary directar
-    fn rename_cyc_chain(&self, cyc_chain: &[OsString], tempdir_path: &Path) -> io::Result<()> {
+    fn rename_cyc_chain(
+        &self,
+        cyc_chain: &[OsString],
+        tempdir_path: Option<&Path>,
+        renamer: &Renamer,
+    ) -> io::Result<()> {
+        assert_eq!(tempdir_path.is_none(), renamer.is_dry_run());
+        let tempdir_path = tempdir_path.unwrap_or_else(|| Path::new("{{tempdir}}"));
         log::trace!("cyclic chain: {:?}", cyc_chain);
         let chain_last = cyc_chain
             .last()
@@ -415,17 +420,48 @@ impl RenamePlan {
         // Break the chain.
         let temp_moved = tempdir_path.join(chain_last);
         log::trace!("rename: {:?} => {:?}", chain_last, temp_moved);
-        self.rename_single(&chain_last, &temp_moved)?;
+        self.rename_single(&chain_last, &temp_moved, renamer)?;
 
         // Process the chain.
-        self.rename_seq_chain(cyc_chain)?;
+        self.rename_seq_chain(cyc_chain, renamer)?;
 
         // Complete the cycle.
         let chain_first = cyc_chain
             .first()
             .expect("should never fail: [consistency] chain has two or more elements");
-        self.rename_single(&temp_moved, &chain_first)?;
+        self.rename_single(&temp_moved, &chain_first, renamer)?;
 
         Ok(())
+    }
+}
+
+/// Renamer: an implementation to be used on rename.
+#[derive(Debug, Clone)]
+pub(crate) enum Renamer {
+    /// `std::fs`.
+    StdFs,
+    /// Dry-run.
+    DryRun,
+}
+
+impl Renamer {
+    /// Returns true if this is a dry-run renamer and does not need any temporary directories.
+    #[inline]
+    fn is_dry_run(&self) -> bool {
+        matches!(*self, Self::DryRun)
+    }
+
+    /// Renames the file at the given path.
+    fn rename(&self, source_dir: &Path, rel_src: &Path, rel_dest: &Path) -> io::Result<()> {
+        match *self {
+            Self::StdFs => {
+                log::trace!("rename: {:?} => {:?}", rel_src, rel_dest);
+                fs::rename(source_dir.join(rel_src), source_dir.join(rel_dest))
+            }
+            Self::DryRun => {
+                println!("{:?} => {:?}", rel_src, rel_dest);
+                Ok(())
+            }
+        }
     }
 }
