@@ -5,6 +5,71 @@
 
 BUlk ReName by Editor.
 
+## Usage
+For usage, see `burne --help`.
+
+```
+$ burne --help
+burne
+Renames child files in a directory using editor
+
+USAGE:
+    burne [FLAGS] [OPTIONS] [source-dir]
+
+ARGS:
+    <source-dir>
+            Source directory that contains files to rename [default: .]
+
+FLAGS:
+    -n, --dry-run
+            Instead of running rename, just prints filenames before and after the rename
+
+    -h, --help
+            Prints help information
+
+    -z, --null-data
+            Separates the lines by NUL characters
+
+    -p, --parents
+            *UNIMPLEMENTED*: Makes parent directories for destination paths as needed.
+
+            Not yet implemented.
+
+    -V, --version
+            Prints version information
+
+
+OPTIONS:
+    -e, --escape <escape>
+            Escape method [default: none] [possible values: none, percent, percent-encoding]
+```
+
+### Escape method
+
+Sometimes you need to handle special characters such as `\n` and/or invalid UTF-8 sequences.
+This is when `--escape` shines.
+
+`--escape=none` (default) does not do any escape.
+This would be most intuitive for editing.
+However, burne fails if the paths before/after rename includes special characters
+such as the line separator and filenames cannot be separated unambiguously.
+
+`--escape=percent-encoding` (or `--escape=percent` for short) applies percent
+encoding to lines in the file to be edited.
+For example, when you do `touch hello$'\n'world` and run burne with `--escape percent`,
+then you will see `hello%0Aworld` in your editor.
+You can add more percent-encoded characters if you'd like.
+
+### Null data
+
+Usually, line feed (`\n`) character is used as a line separator in the file you edit.
+However, sometimes source/destination files can contain `\n` character, and you
+will want to handle such special characters unambiguously in your editor without
+escape.
+
+`--null-data` let burne use `\0` (NUL character) as a line separator.
+Paths cannot contain `\0`, so this makes separation of unescaped filenames unambiguous.
+
 ## License
 
 Licensed under either of
