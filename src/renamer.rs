@@ -366,7 +366,7 @@ impl RenamePlan {
     pub(crate) fn run(self, renamer: &Renamer) -> io::Result<()> {
         let source_dir: &Path = &self.source_dir;
         for seq_chain in &self.seq_rename_chains {
-            self.rename_seq_chain(seq_chain, &renamer)?;
+            self.rename_seq_chain(seq_chain, renamer)?;
         }
         if !self.cyclic_rename_chains.is_empty() {
             // Use `tempfile::TempDir::into_path()` in order to avoid user files
@@ -384,7 +384,7 @@ impl RenamePlan {
                 Some(path)
             };
             for cyc_chain in &self.cyclic_rename_chains {
-                self.rename_cyc_chain(cyc_chain, tempdir_path.as_deref(), &renamer)?;
+                self.rename_cyc_chain(cyc_chain, tempdir_path.as_deref(), renamer)?;
             }
 
             if let Some(tempdir_path) = tempdir_path {
