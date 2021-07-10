@@ -7,6 +7,7 @@ use std::io::{self, BufRead, Write};
 #[cfg(unix)]
 use std::os::unix::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
+use std::str;
 
 use anyhow::{anyhow, bail};
 
@@ -22,8 +23,16 @@ pub(crate) enum Escape {
     /// Cannot rename to filenames with special characters, and fails if the
     /// source filenames contains special characters.
     None,
-    /// Percent encoding.
+    /// Percent encoding, encoded to valid UTF-8 string.
+    ///
+    /// This encodes ASCII control characters, ASCII newline character, and
+    /// invalid UTF-8 sequence.
     PercentEncoding,
+    /// Percent encoding, encoded to ASCII only string.
+    ///
+    /// This encodes ASCII control characters, ASCII newline character, and
+    /// any non-ASCII characters.
+    PercentEncodingAsciiOnly,
 }
 
 impl Escape {
@@ -62,6 +71,46 @@ impl Escape {
                 )),
             },
             Self::PercentEncoding => {
+                let mut bytes = path.as_os_str().as_bytes();
+                while !bytes.is_empty() {
+                    let (utf8_prefix, non_utf8_suffix, rest) = match str::from_utf8(bytes) {
+                        Ok(s) => (s, &b""[..], &bytes[bytes.len()..]),
+                        Err(e) => {
+                            let valid_up_to = e.valid_up_to();
+                            let valid_prefix = str::from_utf8(&bytes[..valid_up_to]).expect(
+                                "should never fail: [consistency] \
+                                already validated by `std::str::from_utf8`",
+                            );
+                            let rest_index = match e.error_len() {
+                                None => bytes.len(),
+                                Some(len) => valid_up_to + len,
+                            };
+                            (
+                                valid_prefix,
+                                &bytes[valid_up_to..rest_index],
+                                &bytes[rest_index..],
+                            )
+                        }
+                    };
+                    // Escape valid UTF-8 sequence.
+                    for c in utf8_prefix.chars() {
+                        if c.is_ascii_control() {
+                            write!(writer, "%{:02X}", c as u8)?;
+                        } else {
+                            write!(writer, "{}", c)?;
+                        }
+                    }
+                    // Escape invalid UTF-8 sequence.
+                    for byte in non_utf8_suffix {
+                        write!(writer, "%{:02X}", byte)?;
+                    }
+                    // Process the rest.
+                    bytes = rest;
+                }
+
+                Ok(())
+            }
+            Self::PercentEncodingAsciiOnly => {
                 let encoded = percent_encoding::percent_encode(
                     path.as_os_str().as_bytes(),
                     PERCENT_ENCODE_ESCAPE_SET,
@@ -90,9 +139,11 @@ impl Escape {
     fn unescape(self, s: &str, _line_sep: LineSeparator) -> anyhow::Result<Cow<'_, Path>> {
         match self {
             Self::None => Ok(Cow::Borrowed(Path::new(s))),
-            Self::PercentEncoding => Ok(Cow::Owned(PathBuf::from(OsString::from_vec(
-                percent_encoding::percent_decode(s.as_bytes()).collect(),
-            )))),
+            Self::PercentEncoding | Self::PercentEncodingAsciiOnly => {
+                Ok(Cow::Owned(PathBuf::from(OsString::from_vec(
+                    percent_encoding::percent_decode(s.as_bytes()).collect(),
+                ))))
+            }
         }
     }
     */
@@ -121,7 +172,7 @@ impl Escape {
         }
         match self {
             Self::None => Ok(Some(OsString::from_vec(bytes))),
-            Self::PercentEncoding => Ok(Some(OsString::from_vec(
+            Self::PercentEncoding | Self::PercentEncodingAsciiOnly => Ok(Some(OsString::from_vec(
                 percent_encoding::percent_decode(&bytes).collect(),
             ))),
         }
@@ -135,7 +186,8 @@ impl Escape {
     pub(crate) fn try_from_cli_str(s: &str) -> anyhow::Result<Self> {
         match s {
             "none" => Ok(Self::None),
-            "percent" | "percent-encoding" => Ok(Self::PercentEncoding),
+            "percent" => Ok(Self::PercentEncoding),
+            "percent-ascii" => Ok(Self::PercentEncodingAsciiOnly),
             s => Err(anyhow!("unknown escape method {:?}", s)),
         }
     }
@@ -144,7 +196,7 @@ impl Escape {
     ///
     /// This is intended for use with CLI parser.
     pub(crate) fn cli_possible_values() -> &'static [&'static str] {
-        &["none", "percent", "percent-encoding"]
+        &["none", "percent", "percent-ascii"]
     }
 }
 
