@@ -54,11 +54,16 @@ This would be most intuitive for editing.
 However, burne fails if the paths before/after rename includes special characters
 such as the line separator and filenames cannot be separated unambiguously.
 
-`--escape=percent-encoding` (or `--escape=percent` for short) applies percent
-encoding to lines in the file to be edited.
+`--escape=percent` applies percent encoding to lines in the file to be edited.
 For example, when you do `touch hello$'\n'world` and run burne with `--escape percent`,
 then you will see `hello%0Aworld` in your editor.
-You can add more percent-encoded characters if you'd like.
+You can use percent-encoded sequences (such as `%20` for a whitespace)
+when you write new filenames.
+
+`--escape=percent-ascii` is similar to `--escape=percent`, but this escapes more characters:
+not only ASCII control characters, but also all non-ASCII characters!
+If your editor cannot handle arbitrary UTF-8 strings, you can use this method to read and write
+only ASCII characters.
 
 ### Null data
 
