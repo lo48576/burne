@@ -53,12 +53,12 @@ impl Escape {
             Self::None => match path.to_str() {
                 Some(s) => {
                     if s.contains(line_sep.to_char()) {
-                        return Err(anyhow!(
+                        bail!(
                             "the path {:?} cannot be escaped with the escape method `none`: \
                              line separator {:?} found",
                             s,
                             line_sep
-                        ));
+                        );
                     }
                     write!(writer, "{}", s)?;
 
