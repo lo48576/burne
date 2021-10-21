@@ -1,7 +1,7 @@
 # burne
 
 [![Build Status](https://gitlab.com/lo48576/burne/badges/develop/pipeline.svg)](https://gitlab.com/lo48576/burne/pipelines/)
-![Minimum supported rustc version: 1.55](https://img.shields.io/badge/rustc-1.55+-lightgray.svg)
+![Minimum supported rustc version: 1.56](https://img.shields.io/badge/rustc-1.56+-lightgray.svg)
 
 BUlk ReName by Editor.
 
