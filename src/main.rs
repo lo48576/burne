@@ -8,7 +8,7 @@
 mod cli_opt;
 mod renamer;
 
-use clap::Clap;
+use clap::Parser as _;
 
 use self::cli_opt::Opt;
 

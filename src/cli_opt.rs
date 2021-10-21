@@ -8,12 +8,12 @@ use std::io;
 use std::path::PathBuf;
 
 use anyhow::{bail, Context as _};
-use clap::Clap;
+use clap::Parser;
 
 use crate::renamer::{Escape, LineSeparator, RenameSetup, Renamer};
 
 /// Renames child files in a directory using editor.
-#[derive(Debug, Clone, Clap)]
+#[derive(Debug, Clone, Parser)]
 pub(crate) struct Opt {
     /// Source directory that contains files to rename.
     #[clap(default_value = ".")]
