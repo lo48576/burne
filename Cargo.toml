@@ -1,12 +1,12 @@
 [package]
 name = "burne"
 version = "0.0.0"
-authors = ["YOSHIOKA Takuma <lo48576@hard-wi.red>"]
+authors = ["YOSHIOKA Takuma <nop_thread@nops.red>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 description = "BUlk ReName by Editor"
-repository = "https://gitlab.com/lo48576/burne"
+repository = "https://gitlab.com/nop_thread/burne"
 keywords = []
 publish = false
 rust-version = "1.56"
@@ -26,4 +26,4 @@ tempfile = "3.2.0"
 
 [badges]
 maintenance = { status = "experimental" }
-gitlab = { repository = "lo48576/burne", branch = "master" }
+gitlab = { repository = "nop_thread/burne", branch = "master" }
