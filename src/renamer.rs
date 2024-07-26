@@ -396,7 +396,7 @@ impl RenameSetup {
         // See <https://github.com/rust-lang/rust/issues/75294>.
         Ok(RenamePlan {
             source_dir: self.source_dir.clone(),
-            seq_rename_chains: seq_chains.into_iter().map(|(_k, v)| v).collect(),
+            seq_rename_chains: seq_chains.into_values().collect(),
             cyclic_rename_chains: cyclic_chains,
         })
     }
@@ -506,7 +506,7 @@ impl RenamePlan {
         // Break the chain.
         let temp_moved = tempdir_path.join(chain_last);
         log::trace!("rename: {:?} => {:?}", chain_last, temp_moved);
-        self.rename_single(&chain_last, &temp_moved, renamer)?;
+        self.rename_single(chain_last, &temp_moved, renamer)?;
 
         // Process the chain.
         self.rename_seq_chain(cyc_chain, renamer)?;
@@ -515,7 +515,7 @@ impl RenamePlan {
         let chain_first = cyc_chain
             .first()
             .expect("should never fail: [consistency] chain has two or more elements");
-        self.rename_single(&temp_moved, &chain_first, renamer)?;
+        self.rename_single(temp_moved, chain_first, renamer)?;
 
         Ok(())
     }
